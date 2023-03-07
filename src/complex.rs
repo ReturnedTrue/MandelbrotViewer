@@ -18,7 +18,7 @@ impl Complex {
 
 	// Pythagoras
 	pub fn abs(&self) -> f32 {
-		(self.real * self.real) + (self.imaginary * self.imaginary).abs()
+		((self.real * self.real) + (self.imaginary * self.imaginary)).abs()
 	}
 }
 
