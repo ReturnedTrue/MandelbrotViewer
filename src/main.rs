@@ -1,3 +1,5 @@
+#![windows_subsystem = "windows"]
+
 mod complex;
 
 use std::collections::HashMap;
@@ -179,16 +181,16 @@ impl EventHandler for MandelbrotViewer {
 				} else if keycode == VirtualKeyCode::O {
 					self.magnification += 2.0;
 
-					self.view_offset.x += (WIDTH / 2.0) + 65.0;
-					self.view_offset.y += (HEIGHT / 2.0) + 125.0;
+					self.view_offset.x += (WIDTH / 2.0) + X_TRANSLATE;
+					self.view_offset.y += (HEIGHT / 2.0) + Y_TRANSLATE;
 
 				} else if keycode == VirtualKeyCode::P {
 					let new_magnification = self.magnification - 2.0;
 
 					if new_magnification >= 1.0 {
 						self.magnification = new_magnification;
-						self.view_offset.x -= (WIDTH / 2.0) + 65.0;
-						self.view_offset.y -= (HEIGHT / 2.0) + 125.0;
+						self.view_offset.x -= (WIDTH / 2.0) + X_TRANSLATE;
+						self.view_offset.y -= (HEIGHT / 2.0) + Y_TRANSLATE;
 					}
 
 				} else if let Some(key_data) = self.movement_data.get_mut(&keycode) {
