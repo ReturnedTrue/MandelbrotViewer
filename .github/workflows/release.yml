@@ -32,6 +32,10 @@ jobs:
     - name: Build for ${{ matrix.os }}
       run: cargo build --release
 
+    - name: Install for alsa-sys crate
+      if: ${{ matrix.os == "ubuntu-latest" }}
+      run: sudo apt-get install -y libasound2-dev
+
     - name: Upload binary to release
       uses: svenstaro/upload-release-action@2.2.1
       with:
