@@ -1,7 +1,6 @@
 #![Image of program](images/Example.png)
 
-
-## Controls
+# Controls
 
 * WASD - move around
 * O - zoom in
