@@ -17,14 +17,11 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            artifact_name: viewer
+            artifact_name: mandelbrot_viewer
             asset_name: viewer-linux-amd64
           - os: windows-latest
-            artifact_name: viewer.exe
+            artifact_name: mandelbrot_viewer.exe
             asset_name: viewer-windows-amd64
-          - os: macos-latest
-            artifact_name: viewer
-            asset_name: viewer-macos-amd64
 
     steps:
     - uses: actions/checkout@v2
