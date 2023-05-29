@@ -21,7 +21,7 @@ jobs:
             asset_name: viewer-linux-amd64
           - os: windows-latest
             artifact_name: mandelbrot_viewer.exe
-            asset_name: viewer-windows-amd64
+            asset_name: viewer-windows-amd64.exe
 
     steps:
     - uses: actions/checkout@v2
