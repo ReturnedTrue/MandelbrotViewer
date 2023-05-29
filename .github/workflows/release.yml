@@ -33,7 +33,7 @@ jobs:
       run: cargo build --release
 
     - name: Install for alsa-sys crate
-      if: ${{ matrix.os == "ubuntu-latest" }}
+      if: ${{ matrix.os == 'ubuntu-latest' }}
       run: sudo apt-get install -y libasound2-dev
 
     - name: Upload binary to release
