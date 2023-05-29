@@ -1,4 +1,4 @@
-#![Image of program](images/Example.png)
+![Image of program](images/Example.png)
 
 # Controls
 
