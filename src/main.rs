@@ -23,14 +23,10 @@ const SCREEN_SIZE: f32 = WIDTH * HEIGHT;
 const X_TRANSLATE: f32 = 65.0;
 const Y_TRANSLATE: f32 = 125.0;
 
-const FPS: u32 = 30;
+const FPS: u32 = 5;
 
 const MAX_ITERATIONS: f32 = 100.0;
 const MAX_STABLE: f32 = 2.0;
-
-const fn blank_point() -> Point2<f32> {
-	Point2 { x: 0.0, y: 0.0 }
-}
 
 fn main() -> Result {
 	let window_setup = conf::WindowSetup::default()
@@ -41,7 +37,7 @@ fn main() -> Result {
 		.dimensions(WIDTH, HEIGHT)
 		.resizable(false);
 
-	let (mut context, event_loop) = ContextBuilder::new("mandelbrot_viewer", "Will")
+	let (mut context, event_loop) = ContextBuilder::new("mandelbrot_viewer", "ReturnedTrue")
 		.window_setup(window_setup)
 		.window_mode(window_mode)
 		.build()?;
@@ -50,10 +46,14 @@ fn main() -> Result {
 	event::run(context, event_loop, viewer);
 }
 
+// utility for point (0, 0)
+const fn blank_point() -> Point2<f32> {
+	Point2 { x: 0.0, y: 0.0 }
+}
 
-// c must be in range -2 < x < 2
-fn into_range(val: f32, constant: f32, magnification: f32) -> f32 {
-	return (((val / constant) / magnification) * 4.0) - 2.0;
+// fits the value divided by the dimension, into range -2 < x < 2
+fn into_range(value: f32, constant: f32, magnification: f32) -> f32 {
+	return (((value / constant) / magnification) * 4.0) - 2.0;
 }
 
 struct MovementKeyData {
@@ -73,8 +73,10 @@ impl MovementKeyData {
 struct MandelbrotViewer {
 	batch: InstanceArray,
 
-	view_offset: Point2<f32>,
 	movement_data: HashMap<VirtualKeyCode, MovementKeyData>,
+
+	has_parameters_changed: bool,
+	view_offset: Point2<f32>,
 	magnification: f32,
 }
 
@@ -86,7 +88,6 @@ impl MandelbrotViewer {
 		MandelbrotViewer { 
 			batch,
 
-			view_offset: blank_point(),
 			movement_data: HashMap::from([
 				(VirtualKeyCode::W, MovementKeyData::new(0.0, -5.0)),
 				(VirtualKeyCode::A, MovementKeyData::new(-5.0, 0.0)),
@@ -94,6 +95,9 @@ impl MandelbrotViewer {
 				(VirtualKeyCode::D, MovementKeyData::new(5.0, 0.0)),
 			]),
 
+			// In order to invoke first render
+			has_parameters_changed: true,
+			view_offset: blank_point(),
 			magnification: 1.0,
 		}
 	}
@@ -153,11 +157,15 @@ impl EventHandler for MandelbrotViewer {
 
 				self.view_offset.x += key_data.velocity.x;
 				self.view_offset.y += key_data.velocity.y;
+				self.has_parameters_changed = true;
 			}
 		}
 
-		self.construct_batch();
-
+		if self.has_parameters_changed {
+			self.construct_batch();
+			self.has_parameters_changed = false;
+		}
+		
 		Ok(())
 	}
 
@@ -172,29 +180,36 @@ impl EventHandler for MandelbrotViewer {
 	}
 
 	fn key_down_event(&mut self, _ctx: &mut Context, input: KeyInput, repeated: bool) -> Result {
-		if !repeated {
-			if let Some(keycode) = input.keycode {
-				if keycode == VirtualKeyCode::R {
-					self.view_offset = blank_point();
-					self.magnification = 1.0;
-				
-				} else if keycode == VirtualKeyCode::O {
-					self.magnification += 2.0;
+		if repeated {
+			return Ok(())
+		}
 
-					self.view_offset.x += (WIDTH / 2.0) + X_TRANSLATE;
-					self.view_offset.y += (HEIGHT / 2.0) + Y_TRANSLATE;
+		if let Some(keycode) = input.keycode {
+			if let Some(key_data) = self.movement_data.get_mut(&keycode) {
+				key_data.is_down = true;
 
-				} else if keycode == VirtualKeyCode::P {
-					let new_magnification = self.magnification - 2.0;
+			} else if keycode == VirtualKeyCode::R {
+				self.view_offset = blank_point();
+				self.magnification = 1.0;
+				self.has_parameters_changed = true;
+			
+			} else if keycode == VirtualKeyCode::O {
+				self.magnification += 2.0;
 
-					if new_magnification >= 1.0 {
-						self.magnification = new_magnification;
-						self.view_offset.x -= (WIDTH / 2.0) + X_TRANSLATE;
-						self.view_offset.y -= (HEIGHT / 2.0) + Y_TRANSLATE;
-					}
+				self.view_offset.x += (WIDTH / 2.0) + X_TRANSLATE;
+				self.view_offset.y += (HEIGHT / 2.0) + Y_TRANSLATE;
 
-				} else if let Some(key_data) = self.movement_data.get_mut(&keycode) {
-					key_data.is_down = true;
+				self.has_parameters_changed = true;
+
+			} else if keycode == VirtualKeyCode::P {
+				let new_magnification = self.magnification - 2.0;
+
+				if new_magnification >= 1.0 {
+					self.magnification = new_magnification;
+					self.view_offset.x -= (WIDTH / 2.0) + X_TRANSLATE;
+					self.view_offset.y -= (HEIGHT / 2.0) + Y_TRANSLATE;
+
+					self.has_parameters_changed = true;
 				}
 			}
 		}
@@ -204,7 +219,6 @@ impl EventHandler for MandelbrotViewer {
 
 	fn key_up_event(&mut self, _ctx: &mut Context, input: KeyInput) -> Result {
 		if let Some(keycode) = input.keycode {
-
 			if let Some(key_data) = self.movement_data.get_mut(&keycode) {
 				key_data.is_down = false;
 			}
