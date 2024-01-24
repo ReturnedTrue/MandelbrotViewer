@@ -21,10 +21,10 @@ const WIDTH: f32 = 500.0;
 const HEIGHT: f32 = 500.0;
 const SCREEN_SIZE: f32 = WIDTH * HEIGHT;
 
-const FPS: u32 = 60;
+const FPS: u32 = 144;
 
-const MAX_ITERATIONS: f32 = 100.0;
-const MAX_STABLE: f32 = 2.0;
+const MAX_ITERATIONS: f64 = 100.0;
+const MAX_STABLE: f64 = 2.0;
 
 const THREADS: usize = 10;
 
@@ -46,22 +46,22 @@ fn main() -> Result {
 	event::run(context, event_loop, viewer);
 }
 
-const fn blank_point() -> Point2<f32> {
+const fn blank_point() -> Point2<f64> {
 	Point2 { x: 0.0, y: 0.0 }
 }
 
 #[inline]
-fn into_range(value: f32, constant: f32, magnification: f32) -> f32 {
+fn into_range(value: f64, constant: f64, magnification: f64) -> f64 {
 	return (((value / constant) / magnification) * 4.0) - 2.0;
 }
 
-fn calculate_for_pixel(x: usize, y: usize, view_offset: Point2<f32>, magnification: f32) -> Color {
-	let translated_x = x as f32 + view_offset.x;
-	let translated_y = y as f32 + view_offset.y;
+fn calculate_for_pixel(x: usize, y: usize, view_offset: Point2<f64>, magnification: f64) -> Color {
+	let translated_x = x as f64 + view_offset.x;
+	let translated_y = y as f64 + view_offset.y;
 	
 	let c = Complex::new(
-		into_range(translated_x, WIDTH, magnification),
-		into_range(translated_y, HEIGHT, magnification)
+		into_range(translated_x, WIDTH as f64, magnification),
+		into_range(translated_y, HEIGHT as f64, magnification)
 	);
 
 	let mut z = Complex::new(0.01, 0.01);
@@ -78,14 +78,14 @@ fn calculate_for_pixel(x: usize, y: usize, view_offset: Point2<f32>, magnificati
 
 	let alpha = iterations / MAX_ITERATIONS;
 
-	let hsv = palette::Hsv::new(alpha * 360.0, 1.0, 1.0);
+	let hsv = palette::Hsv::new(alpha as f32 * 360.0, 1.0, 1.0);
 	let srgb = palette::Srgb::from_color(hsv);
 
 	Color::new(srgb.red, srgb.green, srgb.blue, 1.0)
 
 }
 
-fn calculate_for_range(x_start: usize, x_end: usize, view_offset: Point2<f32>, magnification: f32) -> Vec<DrawParam> {
+fn calculate_for_range(x_start: usize, x_end: usize, view_offset: Point2<f64>, magnification: f64) -> Vec<DrawParam> {
 	let mut range_results = Vec::with_capacity((x_end - x_start) * (HEIGHT as usize));
 
 	for x in x_start..x_end {
@@ -105,11 +105,11 @@ fn calculate_for_range(x_start: usize, x_end: usize, view_offset: Point2<f32>, m
 
 struct MovementKeyData {
 	is_down: bool,
-	velocity: Point2<f32>
+	velocity: Point2<f64>
 }
 
 impl MovementKeyData {
-	pub fn new(x_velocity: f32, y_velocity: f32) -> MovementKeyData {
+	pub fn new(x_velocity: f64, y_velocity: f64) -> MovementKeyData {
 		MovementKeyData {
 			is_down: false,
 			velocity: Point2 { x: x_velocity, y: y_velocity }
@@ -123,8 +123,8 @@ struct MandelbrotViewer {
 	movement_data: HashMap<VirtualKeyCode, MovementKeyData>,
 
 	has_parameters_changed: bool,
-	view_offset: Point2<f32>,
-	magnification: f32,
+	view_offset: Point2<f64>,
+	magnification: f64,
 }
 
 impl MandelbrotViewer {
@@ -180,13 +180,16 @@ impl MandelbrotViewer {
 impl EventHandler for MandelbrotViewer {
 	fn update(&mut self, context: &mut Context) -> Result {
 		while context.time.check_update_time(FPS) {
+			let delta_time = context.time.delta().as_secs_f64();
+
 			for (_key, key_data) in self.movement_data.iter() {
 				if !key_data.is_down {
 					continue;
 				}
 
-				self.view_offset.x += key_data.velocity.x;
-				self.view_offset.y += key_data.velocity.y;
+				self.view_offset.x += key_data.velocity.x * delta_time;
+				self.view_offset.y += key_data.velocity.y * delta_time;
+
 				self.has_parameters_changed = true;
 			}
 		}
@@ -230,14 +233,16 @@ impl EventHandler for MandelbrotViewer {
 						let old_mag = self.magnification;
 						let new_mag = 2.0 * old_mag;
 	
-						let mouse_position = ctx.mouse.position();
-						let pivot_x = (self.view_offset.x + mouse_position.x) / old_mag * new_mag;
-						let pivot_y = (self.view_offset.y + mouse_position.y) / old_mag * new_mag;
+						let mouse_pos = ctx.mouse.position();
+						let offset = self.view_offset;
+
+						let pivot_x = (offset.x + mouse_pos.x as f64) / old_mag * new_mag;
+						let pivot_y = (offset.y + mouse_pos.y as f64) / old_mag * new_mag;
 
 						self.magnification = new_mag;
 
-						self.view_offset.x = pivot_x - WIDTH / 2.0;
-						self.view_offset.y = pivot_y - HEIGHT / 2.0;
+						self.view_offset.x = pivot_x - (WIDTH as f64) / 2.0;
+						self.view_offset.y = pivot_y - (HEIGHT as f64) / 2.0;
 	
 						self.has_parameters_changed = true;
 					},
@@ -246,14 +251,16 @@ impl EventHandler for MandelbrotViewer {
 						let old_mag = self.magnification;
 						let new_mag = (0.5 * old_mag).max(1.0);
 
-						let mouse_position = ctx.mouse.position();
-						let pivot_x = (self.view_offset.x + mouse_position.x) / old_mag * new_mag;
-						let pivot_y = (self.view_offset.y + mouse_position.y) / old_mag * new_mag;
+						let mouse_pos = ctx.mouse.position();
+						let offset = self.view_offset;
+
+						let pivot_x = (offset.x + mouse_pos.x as f64) / old_mag * new_mag;
+						let pivot_y = (offset.y + mouse_pos.y as f64) / old_mag * new_mag;
 
 						self.magnification = new_mag;
 
-						self.view_offset.x = pivot_x - WIDTH / 2.0;
-						self.view_offset.y = pivot_y - HEIGHT / 2.0;
+						self.view_offset.x = pivot_x - (WIDTH as f64) / 2.0;
+						self.view_offset.y = pivot_y - (HEIGHT as f64) / 2.0;
 	
 						self.has_parameters_changed = true;
 					}

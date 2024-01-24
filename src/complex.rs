@@ -4,12 +4,12 @@ use std::ops::{Add, Mul};
 
 #[derive(Copy, Clone)]
 pub struct Complex {
-	real: f32,
-	imaginary: f32
+	real: f64,
+	imaginary: f64
 }
 
 impl Complex {
-	pub fn new(real: f32, imaginary: f32) -> Complex {
+	pub fn new(real: f64, imaginary: f64) -> Complex {
 		Complex {
 			real,
 			imaginary,
@@ -17,7 +17,7 @@ impl Complex {
 	}
 
 	// Pythagoras
-	pub fn abs(&self) -> f32 {
+	pub fn abs(&self) -> f64 {
 		((self.real * self.real) + (self.imaginary * self.imaginary)).abs()
 	}
 }

@@ -3,6 +3,6 @@
 # Controls
 
 * WASD - move around
-* O - zoom in
-* P - zoom out
+* E - zoom in
+* Q - zoom out
 * R - reset view
