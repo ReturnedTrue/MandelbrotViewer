@@ -3,12 +3,13 @@
 mod complex;
 
 use std::collections::HashMap;
+use std::thread;
 
 use complex::Complex;
 
 use ggez::input::keyboard::KeyInput;
 use ggez::mint::Point2;
-use ggez::winit::event::{VirtualKeyCode};
+use ggez::winit::event::VirtualKeyCode;
 use ggez::{Context, ContextBuilder, GameResult as Result};
 use ggez::conf;
 use ggez::graphics::{self, Color, DrawParam, InstanceArray};
@@ -20,13 +21,12 @@ const WIDTH: f32 = 500.0;
 const HEIGHT: f32 = 500.0;
 const SCREEN_SIZE: f32 = WIDTH * HEIGHT;
 
-const X_TRANSLATE: f32 = 65.0;
-const Y_TRANSLATE: f32 = 125.0;
-
-const FPS: u32 = 5;
+const FPS: u32 = 60;
 
 const MAX_ITERATIONS: f32 = 100.0;
 const MAX_STABLE: f32 = 2.0;
+
+const THREADS: usize = 10;
 
 fn main() -> Result {
 	let window_setup = conf::WindowSetup::default()
@@ -46,14 +46,61 @@ fn main() -> Result {
 	event::run(context, event_loop, viewer);
 }
 
-// utility for point (0, 0)
 const fn blank_point() -> Point2<f32> {
 	Point2 { x: 0.0, y: 0.0 }
 }
 
-// fits the value divided by the dimension, into range -2 < x < 2
+#[inline]
 fn into_range(value: f32, constant: f32, magnification: f32) -> f32 {
 	return (((value / constant) / magnification) * 4.0) - 2.0;
+}
+
+fn calculate_for_pixel(x: usize, y: usize, view_offset: Point2<f32>, magnification: f32) -> Color {
+	let translated_x = x as f32 + view_offset.x;
+	let translated_y = y as f32 + view_offset.y;
+	
+	let c = Complex::new(
+		into_range(translated_x, WIDTH, magnification),
+		into_range(translated_y, HEIGHT, magnification)
+	);
+
+	let mut z = Complex::new(0.01, 0.01);
+	let mut iterations = 0.0;
+
+	while z.abs() < MAX_STABLE {
+		if iterations > MAX_ITERATIONS {
+			return Color::new(0.0, 0.0, 0.0, 1.0);
+		}
+
+		iterations += 1.0;
+		z = (z * z) + c;
+	}
+
+	let alpha = iterations / MAX_ITERATIONS;
+
+	let hsv = palette::Hsv::new(alpha * 360.0, 1.0, 1.0);
+	let srgb = palette::Srgb::from_color(hsv);
+
+	Color::new(srgb.red, srgb.green, srgb.blue, 1.0)
+
+}
+
+fn calculate_for_range(x_start: usize, x_end: usize, view_offset: Point2<f32>, magnification: f32) -> Vec<DrawParam> {
+	let mut range_results = Vec::with_capacity((x_end - x_start) * (HEIGHT as usize));
+
+	for x in x_start..x_end {
+		for y in 0..(HEIGHT as usize) {
+			let pixel_color = calculate_for_pixel(x, y, view_offset, magnification);
+
+			let params = DrawParam::new()
+				.dest([x as f32, y as f32])
+				.color(pixel_color);
+
+			range_results.push(params);
+		}
+	}
+
+	range_results
 }
 
 struct MovementKeyData {
@@ -89,10 +136,10 @@ impl MandelbrotViewer {
 			batch,
 
 			movement_data: HashMap::from([
-				(VirtualKeyCode::W, MovementKeyData::new(0.0, -5.0)),
-				(VirtualKeyCode::A, MovementKeyData::new(-5.0, 0.0)),
-				(VirtualKeyCode::S, MovementKeyData::new(0.0, 5.0)),
-				(VirtualKeyCode::D, MovementKeyData::new(5.0, 0.0)),
+				(VirtualKeyCode::W, MovementKeyData::new(0.0, -10.0)),
+				(VirtualKeyCode::A, MovementKeyData::new(-10.0, 0.0)),
+				(VirtualKeyCode::S, MovementKeyData::new(0.0, 10.0)),
+				(VirtualKeyCode::D, MovementKeyData::new(10.0, 0.0)),
 			]),
 
 			// In order to invoke first render
@@ -102,47 +149,30 @@ impl MandelbrotViewer {
 		}
 	}
 
-	fn calculate_for_pixel(&self, x: usize, y: usize) -> Color {
-		let translated_x = (x as f32 / 2.0) + X_TRANSLATE + self.view_offset.x;
-		let translated_y = (y as f32 / 2.0) + Y_TRANSLATE + self.view_offset.y;
-		
-		let c = Complex::new(
-			into_range(translated_x, WIDTH, self.magnification),
-			into_range(translated_y, HEIGHT, self.magnification)
-		);
-	
-		let mut z = Complex::new(0.01, 0.01);
-		let mut iterations = 0.0;
-	
-		while iterations < MAX_ITERATIONS && z.abs() < MAX_STABLE {
-			iterations += 1.0;
-			z = (z * z) + c;
-		}
-	
-		let alpha = iterations / MAX_ITERATIONS;
-	
-		let hsv = palette::Hsv::new(alpha * 360.0, 1.0, 1.0);
-		let srgb = palette::Srgb::from_color(hsv);
-	
-		Color::new(srgb.red, srgb.green, srgb.blue, 1.0)
-	
-	}
-	
 	fn construct_batch(&mut self) -> () {
 		let mut results = Vec::with_capacity(SCREEN_SIZE as usize);
-	
-		for x in 0..(WIDTH as usize) {
-			for y in 0..(HEIGHT as usize) {
-				let pixel_color = self.calculate_for_pixel(x, y);
-	
-				let params = DrawParam::new()
-					.dest([x as f32, y as f32])
-					.color(pixel_color);
-	
+		let mut threads = Vec::with_capacity(THREADS);
+
+		let mut accumulated_x = 0;
+		let per_thread_x = (WIDTH as usize) / THREADS;
+
+		for _ in 0..THREADS {
+			let acc = accumulated_x;
+			let offset = self.view_offset;
+			let mag = self.magnification;
+
+			let t = thread::spawn(move || calculate_for_range(acc, acc + per_thread_x, offset, mag));
+			threads.push(t);
+
+			accumulated_x += per_thread_x;
+		}
+
+		for t in threads {
+			for params in t.join().expect("thread panicked") {
 				results.push(params);
 			}
 		}
-	
+		
 		self.batch.set(results);
 	}
 }
@@ -179,7 +209,7 @@ impl EventHandler for MandelbrotViewer {
 		Ok(())
 	}
 
-	fn key_down_event(&mut self, _ctx: &mut Context, input: KeyInput, repeated: bool) -> Result {
+	fn key_down_event(&mut self, ctx: &mut Context, input: KeyInput, repeated: bool) -> Result {
 		if repeated {
 			return Ok(())
 		}
@@ -188,28 +218,46 @@ impl EventHandler for MandelbrotViewer {
 			if let Some(key_data) = self.movement_data.get_mut(&keycode) {
 				key_data.is_down = true;
 
-			} else if keycode == VirtualKeyCode::R {
-				self.view_offset = blank_point();
-				self.magnification = 1.0;
-				self.has_parameters_changed = true;
-			
-			} else if keycode == VirtualKeyCode::O {
-				self.magnification += 2.0;
+			} else {
+				match keycode {
+					VirtualKeyCode::R => {
+						self.view_offset = blank_point();
+						self.magnification = 1.0;
+						self.has_parameters_changed = true;
+					},
 
-				self.view_offset.x += (WIDTH / 2.0) + X_TRANSLATE;
-				self.view_offset.y += (HEIGHT / 2.0) + Y_TRANSLATE;
+					VirtualKeyCode::E => {
+						let old_mag = self.magnification;
+						let new_mag = 2.0 * old_mag;
+	
+						let mouse_position = ctx.mouse.position();
+						let pivot_x = (self.view_offset.x + mouse_position.x) / old_mag * new_mag;
+						let pivot_y = (self.view_offset.y + mouse_position.y) / old_mag * new_mag;
 
-				self.has_parameters_changed = true;
+						self.magnification = new_mag;
 
-			} else if keycode == VirtualKeyCode::P {
-				let new_magnification = self.magnification - 2.0;
+						self.view_offset.x = pivot_x - WIDTH / 2.0;
+						self.view_offset.y = pivot_y - HEIGHT / 2.0;
+	
+						self.has_parameters_changed = true;
+					},
 
-				if new_magnification >= 1.0 {
-					self.magnification = new_magnification;
-					self.view_offset.x -= (WIDTH / 2.0) + X_TRANSLATE;
-					self.view_offset.y -= (HEIGHT / 2.0) + Y_TRANSLATE;
+					VirtualKeyCode::Q => {
+						let old_mag = self.magnification;
+						let new_mag = (0.5 * old_mag).max(1.0);
 
-					self.has_parameters_changed = true;
+						let mouse_position = ctx.mouse.position();
+						let pivot_x = (self.view_offset.x + mouse_position.x) / old_mag * new_mag;
+						let pivot_y = (self.view_offset.y + mouse_position.y) / old_mag * new_mag;
+
+						self.magnification = new_mag;
+
+						self.view_offset.x = pivot_x - WIDTH / 2.0;
+						self.view_offset.y = pivot_y - HEIGHT / 2.0;
+	
+						self.has_parameters_changed = true;
+					}
+					_ => {}
 				}
 			}
 		}
