@@ -16,19 +16,12 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: ubuntu-latest
-            artifact_name: mandelbrot_viewer
-            asset_name: viewer-linux-amd64
           - os: windows-latest
             artifact_name: mandelbrot_viewer.exe
             asset_name: viewer-windows-amd64.exe
 
     steps:
     - uses: actions/checkout@v2
-
-    - name: Install for alsa-sys crate
-      if: ${{ matrix.os == 'ubuntu-latest' }}
-      run: sudo apt-get install libasound2-dev libudev-dev pkg-config
 
     - name: Build for ${{ matrix.os }}
       run: cargo build --release
